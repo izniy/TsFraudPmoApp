@@ -48,3 +48,78 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+# Web Scraping Educational Content
+
+The project includes a web scraping script to collect scam education articles from various Singapore-based websites. The script is located in `scripts/scrapeEducationContent.js`.
+
+## Setup
+
+1. Ensure you have the required environment variables in your `.env` file:
+```
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+2. The script requires the following dependencies (already included in package.json):
+- axios: For making HTTP requests
+- cheerio: For parsing HTML content
+- dotenv: For loading environment variables
+
+## Database Schema
+
+The scraped articles are stored in the `educational_articles` table with the following structure:
+
+- id: UUID (primary key)
+- title: Text (article title)
+- content: Text (article content)
+- image_url: Text (URL to article image or placeholder)
+- source_url: Text (original article URL)
+- created_at: Timestamp
+- updated_at: Timestamp
+
+## Running the Script
+
+To run the web scraping script:
+
+```bash
+npm run scrape
+```
+
+The script will:
+1. Scrape articles from configured sources
+2. Check for duplicates before insertion
+3. Insert new articles into the Supabase database
+4. Log the number of articles inserted and skipped
+
+## Adding New Sources
+
+To add a new source:
+
+1. Create a new scraper function following the pattern of `scrapeScamShield()`
+2. Add the new scraper to the `main()` function
+3. Ensure proper error handling and logging
+
+## Security
+
+- The script uses appropriate request headers to avoid being blocked
+- Row Level Security (RLS) is enabled on the database table
+- Only the service role can insert new articles
+- All users can read articles
+
+## Error Handling
+
+The script includes comprehensive error handling:
+- HTTP request errors
+- HTML parsing errors
+- Database operation errors
+- Duplicate article detection
+
+## Maintenance
+
+Regular maintenance tasks:
+1. Update User-Agent strings if needed
+2. Monitor for changes in website structures
+3. Add new sources as they become available
+4. Review and update scraping patterns if site layouts change
