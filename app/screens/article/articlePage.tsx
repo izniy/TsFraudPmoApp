@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 
 type ArticleProps = {
   title: string;
@@ -36,12 +36,9 @@ export default function ArticlePage() {
   return (
     <ScrollView className="flex-1 bg-white p-6 pt-24">
       {/* Back button */}
-      <Text
-        className="text-3xl mb-8"
-        onPress={() => router.back()}
-      >
-        ←
-      </Text>
+      <Pressable onPress={() => router.back()} className="mb-8">
+        <Text className="text-4xl text-black">←</Text>
+      </Pressable>
 
       <Text className="text-3xl font-bold mb-2">{article.title}</Text>
       <Text className="text-gray-400 text-lg mb-4">{article.type}</Text>

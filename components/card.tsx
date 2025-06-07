@@ -21,7 +21,7 @@ export default function Card({ title, type, content, mainImage }: CardProps) {
       onPress={() => router.push(`/article?data=${encodedParams}`)}
       activeOpacity={0.8}
     >
-      <View className="bg-white rounded-xl p-1 mb-4 shadow-sm shadow-gray-200 flex-row items-center">
+      <View className="bg-white rounded-xl p-1 mb-4 shadow shadow-gray-200 flex-row items-center">
         {mainImage && (
           <Image
             source={{ uri: mainImage }}

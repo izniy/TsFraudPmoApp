@@ -1,9 +1,13 @@
 import Card from '@/components/card';
+import { LoadingScreen } from '@/components/loading';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function EducationPage() {
+  const [loading, setLoading] = useState(true);
+  
   const sampleEducation = [
     {
       title: "How to Spot Fake Tech Support",
@@ -32,6 +36,13 @@ export default function EducationPage() {
     },
   ];
 
+
+  // Placeholder to simulate fetching data
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const togglePage = () => {
     router.replace('/scams')
   };
@@ -39,7 +50,7 @@ export default function EducationPage() {
   return (
     <View className='flex-1 bg-white pt-24 px-4'>
       <View className="items-center mb-6">
-        <View className="flex-row bg-gray-200 rounded-full p-1 w-1/2">
+        <View className="flex-row bg-gray-100 rounded-full p-1 w-1/2 shadow">
           <TouchableOpacity
             className="flex-1 py-2 rounded-full items-center justify-center"
             onPress={togglePage}
@@ -55,18 +66,27 @@ export default function EducationPage() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4 pt-6">
-        <Text className="text-2xl font-bold text-gray-900 mb-6">Educational Articles</Text>
+      <Text className="text-2xl font-bold text-gray-900 px-4 mb-4">Educational Articles</Text>
 
-        {sampleEducation.map((article, index) => (
-          <Card
-            key={index}
-            title={article.title}
-            content={article.content}
-            mainImage={article.mainImage}
-          />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <LoadingScreen />
+      ) : (
+        <ScrollView className="flex-1 px-4">
+          {sampleEducation.map((article, index) => (
+            <Card
+              key={index}
+              title={article.title}
+              content={article.content}
+              mainImage={article.mainImage}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      <View className="py-8 items-center">
+        <View className="w-14 h-14 bg-transparent rounded-full items-center justify-center shadow-lg" />
+      </View>
+
     </View>
   );
 }

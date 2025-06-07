@@ -13,8 +13,8 @@ export default function Index() {
 
   return (
     <View className="flex-1 justify-center items-center bg-white">
-      <Text className="mb-3 text-5xl font-bold">TsFraudPmo.</Text>
-      <ActivityIndicator size="large" color="#888" />
+      <Text className="mb-4 text-5xl font-bold">TsFraudPmo.</Text>
+      <ActivityIndicator size="small" color="#888" />
     </View>
   );
 }

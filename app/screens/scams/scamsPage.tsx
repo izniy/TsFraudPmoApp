@@ -1,11 +1,13 @@
 import Card from '@/components/card';
+import { LoadingScreen } from '@/components/loading';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ScamsPage() {
+  const [loading, setLoading] = useState(true);
   const [popupVisible, setPopupVisible] = useState(false);
 
   const recentScams = [
@@ -41,6 +43,12 @@ export default function ScamsPage() {
     },
   ];
 
+  // Placeholder to simulate fetching data
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+  
   const togglePage = () => {
     router.replace('/education')
   };
@@ -48,7 +56,7 @@ export default function ScamsPage() {
   return (
     <View className="flex-1 bg-white pt-24 px-4">
       <View className="items-center mb-6">
-        <View className="flex-row bg-gray-200 rounded-full p-1 w-1/2">
+        <View className="flex-row bg-gray-100 rounded-full p-1 w-1/2 shadow">
           <TouchableOpacity
             className="flex-1 py-2 rounded-full bg-white shadow items-center justify-center"
           >
@@ -64,19 +72,23 @@ export default function ScamsPage() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4 pt-6">
-        <Text className="text-2xl font-bold text-gray-900 mb-6">Recent Scams</Text>
+      <Text className="text-2xl font-bold text-gray-900 px-4 mb-4">Recent Scams</Text>
 
-        {recentScams.map((scam, index) => (
-          <Card
-            key={index}
-            title={scam.title}
-            content={scam.content}
-            type={scam.type}
-            mainImage={scam.mainImage}
-          />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <LoadingScreen />
+      ) : (
+        <ScrollView className="flex-1 px-4">
+          {recentScams.map((scam, index) => (
+            <Card
+              key={index}
+              title={scam.title}
+              content={scam.content}
+              type={scam.type}
+              mainImage={scam.mainImage}
+            />
+          ))}
+        </ScrollView>
+      )}
 
       <View className="py-8 items-center">
         <TouchableOpacity
