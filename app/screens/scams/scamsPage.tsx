@@ -4,49 +4,51 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../../utils/supabase';
+import ScamReportForm from './form';
+
+interface ScamReport {
+  id: number;
+  title: string;
+  type: string;
+  summary: string;
+  image: string | null;
+  timestamp: string;
+  count: number;
+}
 
 export default function ScamsPage() {
   const [loading, setLoading] = useState(true);
   const [popupVisible, setPopupVisible] = useState(false);
+  const [recentScams, setRecentScams] = useState<ScamReport[]>([]);
 
-  const recentScams = [
-    {
-      title: "Fake Tech Support",
-      type: "Phishing",
-      content: "Scammers pretend to be from well-known companies and ask for remote access to your computer to steal info or money.",
-      mainImage: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Romance Scams",
-      type: "Social Engineering",
-      content: "Fake online relationships to emotionally manipulate victims into sending money or personal information.",
-      mainImage: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Investment Scams",
-      type: "Fraud",
-      content: "Promises of high returns with no risk, often pushing fake or worthless investments.",
-      mainImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Phishing Emails",
-      type: "Phishing",
-      content: "Emails that look like they come from a trusted source, asking you to click links or provide login details.",
-      mainImage: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Fake Delivery Notifications",
-      type: "Scam",
-      content: "Scam messages pretending to be from courier companies asking for payment or personal info.",
-      mainImage: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=400&q=80",
-    },
-  ];
+  async function fetchScams() {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('scamreports')
+        .select('id, title, type, summary, image, timestamp, count')
+        .order('timestamp', { ascending: false })
+        .limit(20);
 
-  // Placeholder to simulate fetching data
+      if (error) {
+        console.error('Error fetching scam reports:', error.message);
+        return;
+      }
+
+      if (data) {
+        setRecentScams(data);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching scam reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
+    fetchScams();
   }, []);
   
   const togglePage = () => {
@@ -55,10 +57,10 @@ export default function ScamsPage() {
 
   return (
     <View className="flex-1 bg-white pt-24 px-4">
-      <View className="items-center mb-6">
-        <View className="flex-row bg-gray-100 rounded-full p-1 w-1/2 shadow">
+      <View className="items-center mb-6 bg-white">
+        <View className="flex-row bg-white rounded-full p-1 w-2/3 shadow">
           <TouchableOpacity
-            className="flex-1 py-2 rounded-full bg-white shadow items-center justify-center"
+            className="flex-1 py-2 rounded-full bg-white items-center justify-center"
           >
             <SimpleLineIcons name="home" size={24} color="black" />
           </TouchableOpacity>
@@ -67,7 +69,7 @@ export default function ScamsPage() {
             className="flex-1 py-2 rounded-full items-center justify-center"
             onPress={togglePage}
           >
-            <SimpleLineIcons name="book-open" size={24} color="black" />
+            <SimpleLineIcons name="book-open" size={24} color="gray" />
           </TouchableOpacity>
         </View>
       </View>
@@ -78,15 +80,19 @@ export default function ScamsPage() {
         <LoadingScreen />
       ) : (
         <ScrollView className="flex-1 px-4">
-          {recentScams.map((scam, index) => (
-            <Card
-              key={index}
-              title={scam.title}
-              content={scam.content}
-              type={scam.type}
-              mainImage={scam.mainImage}
-            />
-          ))}
+          {recentScams.length === 0 ? (
+            <Text className="text-center text-gray-500 mt-4">No scam reports found.</Text>
+          ) : (
+            recentScams.map((scam) => (
+              <Card
+                key={scam.id}
+                title={scam.title}
+                content={scam.summary}
+                type={scam.type}
+                mainImage={scam.image ?? undefined}
+              />
+            ))
+          )}
         </ScrollView>
       )}
 
@@ -101,25 +107,14 @@ export default function ScamsPage() {
       </View>
 
       {/* Report Modal */}
-      <Modal
-        transparent
+      <ScamReportForm
         visible={popupVisible}
-        animationType="fade"
-        onRequestClose={() => setPopupVisible(false)}
-      >
-        <View className="flex-1 bg-black/30 justify-center items-center">
-          <View className="bg-white p-6 rounded-xl w-4/5">
-            <Text className="text-lg font-semibold text-gray-900 mb-4">Report a Scam</Text>
-            <Text className="text-gray-600 mb-6">WIP</Text>
-            <TouchableOpacity
-              onPress={() => setPopupVisible(false)}
-              className="self-end px-4 py-2 bg-blue-600 rounded-lg"
-            >
-              <Text className="text-white">Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setPopupVisible(false)}
+        onSubmitted={() => {
+          fetchScams();
+          setPopupVisible(false);
+        }}
+      />
     </View>
   );
 }

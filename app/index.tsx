@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 export default function Index() {
   useEffect(() => {
@@ -14,7 +14,6 @@ export default function Index() {
   return (
     <View className="flex-1 justify-center items-center bg-white">
       <Text className="mb-4 text-5xl font-bold">TsFraudPmo.</Text>
-      <ActivityIndicator size="small" color="#888" />
     </View>
   );
 }

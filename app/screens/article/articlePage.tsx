@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 
 type ArticleProps = {
   title: string;
@@ -34,24 +34,28 @@ export default function ArticlePage() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-white p-6 pt-24">
+    <SafeAreaView className="flex-1 bg-white">
       {/* Back button */}
-      <Pressable onPress={() => router.back()} className="mb-8">
-        <Text className="text-4xl text-black">←</Text>
-      </Pressable>
+      <View className="px-6 pt-4">
+        <Pressable onPress={() => router.back()} hitSlop={10}>
+          <Text className="text-3xl text-black">←</Text>
+        </Pressable>
+      </View>
 
-      <Text className="text-3xl font-bold mb-2">{article.title}</Text>
-      <Text className="text-gray-400 text-lg mb-4">{article.type}</Text>
+      <ScrollView className="flex-1 px-6 pt-4">
+        <Text className="text-3xl font-bold mb-1">{article.title}</Text>
+        <Text className="text-gray-400 text-base mb-4">{article.type}</Text>
 
-      {article.mainImage && (
-        <Image
-          source={{ uri: article.mainImage }}
-          className="w-full h-56 rounded-lg mb-6"
-          resizeMode="cover"
-        />
-      )}
+        {article.mainImage && (
+          <Image
+            source={{ uri: article.mainImage }}
+            className="w-full h-60 rounded-xl mb-6"
+            resizeMode="contain"
+          />
+        )}
 
-      <Text className="text-gray-800 text-base leading-8">{article.content}</Text>
-    </ScrollView>
+        <Text className="text-gray-800 text-base leading-7 pb-16">{article.content}</Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

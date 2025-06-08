@@ -50,16 +50,16 @@ export default function EducationPage() {
   return (
     <View className='flex-1 bg-white pt-24 px-4'>
       <View className="items-center mb-6">
-        <View className="flex-row bg-gray-100 rounded-full p-1 w-1/2 shadow">
+        <View className="flex-row bg-white rounded-full p-1 w-2/3 shadow">
           <TouchableOpacity
             className="flex-1 py-2 rounded-full items-center justify-center"
             onPress={togglePage}
           >
-            <SimpleLineIcons name="home" size={24} color="black" />
+            <SimpleLineIcons name="home" size={24} color="gray" />
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="flex-1 py-2 rounded-full bg-white shadow items-center justify-center"
+            className="flex-1 py-2 rounded-full bg-white items-center justify-center"
           >
             <SimpleLineIcons name="book-open" size={24} color="black" />
           </TouchableOpacity>

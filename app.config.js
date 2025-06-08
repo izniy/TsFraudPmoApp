@@ -41,6 +41,8 @@ module.exports = {
     extra: {
       supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+      openAiKey: process.env.EXPO_OPENAI_API_KEY,
+      geminiKey: process.env.EXPO_GEMINI_API_KEY,
     }
   }
 }; 
