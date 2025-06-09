@@ -26,12 +26,16 @@ export default function Card({ title, type, content, mainImage, advice }: CardPr
       activeOpacity={0.8}
     >
       <View className="bg-white rounded-xl p-1 mb-4 shadow shadow-gray-200 flex-row items-center">
-        {mainImage && (
+        {mainImage ? (
           <Image
             source={{ uri: mainImage }}
             className="w-20 h-20 rounded-lg mr-4"
             resizeMode="cover"
           />
+        ) : (
+          <View className="w-20 h-20 rounded-lg mr-4 bg-indigo-100 items-center justify-center">
+            <Text className="text-2xl">🛡️</Text>
+          </View>
         )}
 
         <View className="flex-1 justify-center pr-4">
