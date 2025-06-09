@@ -6,14 +6,18 @@ type CardProps = {
   type?: string;  // optional
   content: string;
   mainImage?: string;
+  advice?:string;
 };
 
-export default function Card({ title, type, content, mainImage }: CardProps) {
+export default function Card({ title, type, content, mainImage, advice }: CardProps) {
   const router = useRouter();
+
+  // Log advice before encoding
+  console.log('→ Advice passed to Card:', advice);
 
   // Encode all props including content to pass to article page
   const encodedParams = encodeURIComponent(
-    JSON.stringify({ title, type, content, mainImage })
+    JSON.stringify({ title, type, content, mainImage, advice })
   );
 
   return (

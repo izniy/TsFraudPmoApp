@@ -3,6 +3,9 @@ const { getJson } = require('serpapi');
 const dotenv = require('dotenv');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { summariseWithGemini, generateEmbedding, extractDomain, isValidContent, checkForDuplicate } = require('../lib/ai/EducationUtils');
 
 // Load environment variables
 dotenv.config();
@@ -51,27 +54,53 @@ function isValidArticle(article) {
   return { valid: true };
 }
 
-async function isDuplicate(url) {
-  const { data } = await supabase
-    .from('educational_articles')
-    .select('id')
-    .eq('source_url', url)
-    .single();
-  return !!data;
+async function fetchFullContent(url) {
+  try {
+    const { data: html } = await axios.get(url, { timeout: 8000 });
+    const $ = cheerio.load(html);
+    const paragraphs = $('p').map((_, el) => $(el).text().trim()).get();
+    const text = paragraphs.join('\n\n');
+    return text;
+  } catch (err) {
+    console.error('Failed to fetch full content:', url, err.message);
+    return '';
+  }
 }
 
-async function insertToSupabase(article) {
-  const timestamp = new Date().toISOString();
-  const { error } = await supabase
-    .from('educational_articles')
-    .insert([{
-      title: article.title,
-      content: article.snippet,
-      source_url: article.link,
-      image_url: null,
-      created_at: timestamp,
-    }]);
-  if (error) throw new Error(`Insert error: ${error.message}`);
+async function isDuplicate(article) {
+  return await checkForDuplicate(article.title);
+}
+
+async function insertToSupabase(rawArticle) {
+  const fullText = await fetchFullContent(rawArticle.link);
+  if (!isValidContent(fullText)) {
+    console.log('Skipped due to insufficient content from:', rawArticle.link);
+    return;
+  }
+
+  try {
+    const processed = await summariseWithGemini(fullText);
+    const embedding = await generateEmbedding(processed.content);
+    const domain = extractDomain(rawArticle.link);
+    const timestamp = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('educational_articles')
+      .insert([{
+        title: processed.title,
+        content: processed.content,
+        advice: processed.advice,
+        embedding,
+        source_url: rawArticle.link,
+        image_url: null,
+        type: domain,
+        created_at: timestamp,
+      }]);
+
+    if (error) throw new Error(`Insert error: ${error.message}`);
+  } catch (error) {
+    console.error('Gemini processing or DB insert failed for:', rawArticle.link, error.message);
+  }
 }
 
 async function searchAndProcessArticles(keyword) {
@@ -89,7 +118,7 @@ async function searchAndProcessArticles(keyword) {
         continue;
       }
 
-      if (await isDuplicate(article.link)) {
+      if (await isDuplicate(article)) {
         stats.skipped++;
         stats.skipReasons['Duplicate'] = (stats.skipReasons['Duplicate'] || 0) + 1;
         continue;

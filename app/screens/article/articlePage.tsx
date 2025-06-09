@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 
 type ArticleProps = {
   title: string;
@@ -19,7 +20,10 @@ export default function ArticlePage() {
     if (data) {
       try {
         const decoded = decodeURIComponent(data);
-        setArticle(JSON.parse(decoded));
+        console.log('→ Decoded data:', decoded);
+        const parsed = JSON.parse(decoded);
+        console.log('→ Parsed advice:', parsed.advice);
+        setArticle(parsed);
       } catch (e) {
         console.error('Failed to parse article data', e);
       }
@@ -55,14 +59,20 @@ export default function ArticlePage() {
           />
         )}
 
-        <Text className="text-gray-800 text-base leading-7">{article.content}</Text>
+        <Markdown style={{ body: { color: '#1f2937', fontSize: 16, lineHeight: 24 } }}>
+          {article.content}
+        </Markdown>
 
+        <View style={{ height: 24 }} />
+        
         {article.advice && (
           <View className="bg-gray-50 rounded-xl p-6 mb-8">
             <Text className="text-xl font-semibold mb-4 flex-row items-center">
               🛡️ Tips to Stay Safe
             </Text>
-            <Text className="text-gray-700 text-base leading-7">{article.advice}</Text>
+            <Markdown style={{ body: { color: '#374151', fontSize: 16, lineHeight: 24 } }}>
+              {article.advice?.trim() || '*Look out for yourself and your loved ones!*'}
+            </Markdown>
           </View>
         )}
       </ScrollView>
