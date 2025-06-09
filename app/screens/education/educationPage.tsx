@@ -2,46 +2,18 @@ import Card from '@/components/card';
 import { LoadingScreen } from '@/components/loading';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import useEducationArticles, { EducationArticle } from '../../../hooks/useEducationArticles';
 
-export default function EducationPage() {
-  const [loading, setLoading] = useState(true);
+export default function EducationPage() {  
   
-  const sampleEducation = [
-    {
-      title: "How to Spot Fake Tech Support",
-      content: "Learn to recognize common signs of fake tech support scams, including unsolicited calls and requests for remote access.",
-      mainImage: "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Protecting Yourself From Romance Scams",
-      content: "Understand how scammers build fake relationships and ways to safeguard your emotions and finances online.",
-      mainImage: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Investment Safety Tips",
-      content: "Tips to evaluate investments carefully, avoid high-risk promises, and recognize red flags in investment offers.",
-      mainImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Avoiding Phishing Emails",
-      content: "Learn how to identify phishing attempts in emails and protect your accounts by verifying sources before clicking links.",
-      mainImage: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=400&q=80",
-    },
-    {
-      title: "Dealing with Fake Delivery Notifications",
-      content: "Understand the common tactics scammers use in fake delivery notices and how to confirm real shipments safely.",
-      mainImage: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=400&q=80",
-    },
-  ];
+  const { loading, error, articles }: {
+    loading: boolean;
+    error: string | null;
+    articles: EducationArticle[];
+  } = useEducationArticles();
 
-
-  // Placeholder to simulate fetching data
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
+  console.log('Fetched articles:', articles);
 
   const togglePage = () => {
     router.replace('/scams')
@@ -72,14 +44,20 @@ export default function EducationPage() {
         <LoadingScreen />
       ) : (
         <ScrollView className="flex-1 px-4">
-          {sampleEducation.map((article, index) => (
-            <Card
-              key={index}
-              title={article.title}
-              content={article.content}
-              mainImage={article.mainImage}
-            />
-          ))}
+          {articles.length === 0 ? (
+            <Text className="text-center text-gray-500 mt-4">
+              No educational articles found.
+            </Text>
+          ) : (
+            articles.map((article: EducationArticle, index: number) => (
+              <Card
+                key={index}
+                title={article.title}
+                content={article.content}
+                mainImage={article.image_url ?? undefined}
+              />
+            ))
+          )}
         </ScrollView>
       )}
 
