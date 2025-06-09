@@ -53,6 +53,7 @@ export default function EducationPage() {
               <Card
                 key={index}
                 title={article.title}
+                type={article.type}
                 content={article.content}
                 mainImage={article.image_url ?? undefined}
               />

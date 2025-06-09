@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "scrape": "node scripts/scrapeEducationContent.js"
+    "scrape": "node scripts/scrapeFromSerpApi.js"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

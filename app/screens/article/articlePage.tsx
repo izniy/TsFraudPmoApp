@@ -4,8 +4,9 @@ import { Image, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-na
 
 type ArticleProps = {
   title: string;
-  type: string;
+  type?: string;
   content: string;
+  advice?: string;
   mainImage?: string;
 };
 
@@ -54,7 +55,16 @@ export default function ArticlePage() {
           />
         )}
 
-        <Text className="text-gray-800 text-base leading-7 pb-16">{article.content}</Text>
+        <Text className="text-gray-800 text-base leading-7">{article.content}</Text>
+
+        {article.advice && (
+          <View className="bg-gray-50 rounded-xl p-6 mb-8">
+            <Text className="text-xl font-semibold mb-4 flex-row items-center">
+              🛡️ Tips to Stay Safe
+            </Text>
+            <Text className="text-gray-700 text-base leading-7">{article.advice}</Text>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
