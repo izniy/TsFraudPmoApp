@@ -302,18 +302,16 @@ def verify_report_py(description: str, gemini_client):
     Returns True if likely legitimate, False otherwise or if an error occurs.
     """
     prompt = (
-        f"Verify whether this scam is a legitimate incident through identifiying common scam red flags such as phishing links or other signs. "
+        f"Verify whether this scam is a legitimate incident through identifiying common scam red flags such as phishing links or other signs. If unsure, just return true to be safe.\\n "
         f"Return a single boolean (true or false) response.\\n"
         f"Incident description:\\n{description}"
     )
-    print(f"{description}")
     try:
         response = gemini_client.models.generate_content(
             model="gemini-2.0-flash", contents=prompt,
         )
         
         text = response.text.strip().lower()
-        print(f"[verify_report_py] Verification raw response: {text}")
 
         if text == 'true':
             return True
@@ -337,7 +335,6 @@ def process_full_report(bot, message, gemini_client):
     user_id = message.from_user.id
     if user_id not in user_reports:
         bot.send_message(message.chat.id, "No report data found to submit. Please start a new report with /report.")
-        send_welcome(bot, message)
         return
 
     report_data = user_reports[user_id]
@@ -369,15 +366,15 @@ def process_full_report(bot, message, gemini_client):
             file_id = evidence_item.replace("[PHOTO] ", "")
             if db_enabled and supabase:
                 try:
-                    bot.send_message(message.chat.id, "Uploading photo evidence...")
                     uploaded_file_name = upload_image_to_supabase_py(bot, file_id, supabase)
                     if uploaded_file_name:
-                        image_public_url = supabase.storage.from_('images').get_public_url(uploaded_file_name)
-                        bot.send_message(message.chat.id, "Photo evidence uploaded successfully.")
+                        image_public_url = supabase.storage.from_('images').get_public_url(uploaded_file_name) 
+                        print(f"[process_full_report] Image uploaded successfully: {image_public_url}")
                         text_evidence_items.append(f"[Photo evidence link: {image_public_url}]")
                         processed_photo_evidence = True
                     else:
                         text_evidence_items.append("[Photo evidence provided but upload failed.]")
+                        bot.send_message(message.chat.id, "Photo evidence upload failed. Proceeding without it.") # Added user feedback
                 except Exception as e:
                     print(f"Error uploading image during full report processing: {e}")
                     bot.send_message(message.chat.id, f"Could not upload photo evidence: {str(e)[:100]}. Proceeding without it.")
@@ -420,7 +417,7 @@ def process_full_report(bot, message, gemini_client):
         try:
             match_params = {
                 'query_embedding': final_embeddings,
-                'match_threshold': 0.8,
+                'match_threshold': 0.9,
                 'match_count': 1 
             }
             similar_reports_response = supabase.rpc('match_scam', match_params).execute()
@@ -551,7 +548,8 @@ def process_full_report(bot, message, gemini_client):
                         elif image_bytes.startswith(b'\x89PNG\r\n\x1a\n'): final_mime_type = 'image/png'
                         else: final_mime_type = 'application/octet-stream'
                     if final_mime_type.startswith("image/"):
-                        image_part = {"mime_type": final_mime_type, "data": image_bytes}
+                        image_blob = types.Blob(mime_type=final_mime_type, data=image_bytes)
+                        image_part = types.Part(inline_data=image_blob)
                         gemini_request_contents.append(image_part)
                     else: print(f"Skipping image for Gemini: mime_type '{final_mime_type}' not image for {image_public_url}")
                 except Exception as e_img_fetch: 
@@ -602,14 +600,12 @@ def process_full_report(bot, message, gemini_client):
     # Common cleanup and final message
     if user_id in user_reports:
         del user_reports[user_id]
-    send_welcome(bot, message)
-
 
 def upload_image_to_supabase_py(bot: telebot.TeleBot, file_id: str, supabase_client):
     try:
         file_info = bot.get_file(file_id)
         if file_info.file_path is None:
-            raise ValueError("File path is None")
+            raise ValueError("File path is None from Telegram API")
             
         downloaded_file_bytes = bot.download_file(file_info.file_path)
 
@@ -623,20 +619,23 @@ def upload_image_to_supabase_py(bot: telebot.TeleBot, file_id: str, supabase_cli
 
         upload_response = supabase_client.storage.from_('images').upload(
             path=file_name,
-            file=io.BytesIO(downloaded_file_bytes),
-            file_options={"content-type": content_type, "upsert": "true"}
+            file=downloaded_file_bytes,
+            file_options={"content-type": content_type}
         )
-        if upload_response.status_code != 200:
+        if hasattr(upload_response, 'status_code') and upload_response.status_code != 200:
             error_message = f"Failed to upload image to Supabase. Status: {upload_response.status_code}"
             try:
-                error_details = json.loads(upload_response.content.decode())
-                error_message += f" Details: {error_details.get('message', 'Unknown error')}"
-                raise Exception(error_message)
-            except json.JSONDecodeError:
-                raise Exception(error_message)
-                
+                error_content = upload_response.content.decode()
+                error_details = json.loads(error_content)
+                error_message += f" Details: {error_details.get('message', error_content)}"
+            except (json.JSONDecodeError, AttributeError): 
+                error_message += " Could not parse error details from response."
+            print(error_message)
+            return None
+
         return file_name
-    except Exception as e:
+        
+    except Exception as e: 
         print(f"Error uploading image to Supabase: {e}")
         return None
 
