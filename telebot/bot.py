@@ -25,6 +25,11 @@ def handle_report(message):
     f.report_scam(bot, message, client)
 
 
+@bot.message_handler(commands=['verify'])
+def handle_verify(message):
+    f.initiate_verify_message(bot, message, client)
+
+
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
     f.send_message(bot, client, message)

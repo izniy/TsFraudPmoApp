@@ -45,6 +45,7 @@ def send_welcome(bot, message):
     bot.reply_to(message, "Hi, I'm TsFraudPmo, your go-to bot for scam reporting and fraud awareness!"
                           "I can help you understand scams, avoid them, and report any suspicious activity.\n\n"
                           "If you'd like to report a scam, simply press the button or type /report!\n\n"
+                          "You can also ask me to verify messages for potential scams by typing /verify.\n\n"
                           "Else, you can ask me anything or just chat with me!",
                  reply_markup=markup)
 
@@ -302,7 +303,7 @@ def verify_report_py(description: str, gemini_client):
     Returns True if likely legitimate, False otherwise or if an error occurs.
     """
     prompt = (
-        f"Verify whether this scam is a legitimate incident through identifiying common scam red flags such as phishing links or other signs. If unsure, just return true to be safe.\\n "
+        f"Verify whether this scam is a legitimate incident through identifiying common scam red flags such as phishing links, unsolicited requests for personal info (passwords, bank details, phone number), sense of urgency or threats. If unsure, just return true to be safe.\\n "
         f"Return a single boolean (true or false) response.\\n"
         f"Incident description:\\n{description}"
     )
@@ -354,7 +355,6 @@ def process_full_report(bot, message, gemini_client):
             del user_reports[user_id]
         send_welcome(bot, message)
         return
-    
     bot.send_message(message.chat.id, "Report verified. Now processing your report...")
 
     image_public_url = None
@@ -600,6 +600,56 @@ def process_full_report(bot, message, gemini_client):
     # Common cleanup and final message
     if user_id in user_reports:
         del user_reports[user_id]
+
+def initiate_verify_message(bot, message, gemini_client):
+    bot.send_message(message.chat.id, "Please send the message you want to verify for potential scam content.")
+    bot.register_next_step_handler(message, process_verification_request, bot, gemini_client)
+
+def process_verification_request(message, bot, gemini_client):
+    if message.content_type != 'text':
+        bot.send_message(message.chat.id, "Sorry, I can only verify text messages. Please try the /verify command again and send the message text.")
+        return
+    
+    user_message_text = message.text
+
+    if not user_message_text:
+        bot.send_message(message.chat.id, "I didn't receive a message to verify. Please try the /verify command again and send the message text.")
+        return
+
+    if user_message_text.startswith('/') or len(user_message_text) < 10:
+        bot.send_message(message.chat.id, "The message seems too short or might be a command. Please send the actual message content you want to verify.")
+        return
+
+    prompt = (
+        f"You are a TsFraudPmo, a scam detection expert. A user has provided the following message and wants to know if it's a scam.\\n"
+        f"Analyze the message critically for common scam red flags, such as:\\n"
+        f"- Sense of urgency or threats\\n"
+        f"- Unsolicited requests for personal information (passwords, bank details, social security numbers)\\n"
+        f"- Suspicious links or attachments (Note: You will only see the text, not actual links or attachments. Evaluate based on how they are described or if their presence is mentioned.)\\n"
+        f"- Poor grammar, spelling, or unprofessional language\\n"
+        f"- Offers that seem too good to be true\\n"
+        f"- Impersonation of legitimate organizations or individuals\\n"
+        f"- Unusual payment methods requested\\n\\n"
+        f"Based on your analysis:\\n"
+        f"1. Start your response with a clear assessment: 'This message is LIKELY A SCAM.', 'This message is LIKELY NOT A SCAM.', or 'This message has SOME RED FLAGS and could be a scam.'\\n"
+        f"2. Provide a step-by-step reasoning for your assessment, explaining which red flags (if any) you identified in the message, or why you believe it's not a scam. Be specific and refer to parts of the message if possible.\\n\\n"
+        f"User's message to verify:\\n"
+        f"{user_message_text}\\n"
+    )
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.0-flash-lite",
+            contents=prompt,
+        )
+        
+        verification_result = response.text.strip()
+        bot.send_message(message.chat.id, verification_result)
+
+    except Exception as e:
+        print(f"Error during scam verification with Gemini: {e}")
+        bot.send_message(message.chat.id, "Sorry, I encountered an error while trying to verify the message. Please try again later.")
+    return
 
 def upload_image_to_supabase_py(bot: telebot.TeleBot, file_id: str, supabase_client):
     try:
