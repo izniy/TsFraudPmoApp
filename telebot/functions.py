@@ -431,7 +431,7 @@ def process_full_report(bot, message, gemini_client):
                 existing_id = existing_report.get('id')
                 bot.send_message(message.chat.id, f"Similar report found (ID: {existing_id[:8]}...). Merging information.")
                 
-                current_count = existing_report.get('count', 1) 
+                current_count = supabase.table('scamreports').select('*').eq('id', existing_id).single().execute().data.get('count', 1)
                 print(f"Current count for existing report: {current_count}")
                 current_title = existing_report.get('title', '')
                 current_summary = existing_report.get('summary', '')
