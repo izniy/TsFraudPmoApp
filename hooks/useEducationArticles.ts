@@ -9,6 +9,7 @@ export interface EducationArticle {
   image_url: string;
   source_url: string;
   created_at: string;
+  type: string;
 }
 
 export default function useEducationArticles(limit: number = 20) {
@@ -24,7 +25,7 @@ export default function useEducationArticles(limit: number = 20) {
 
         const { data, error: fetchError } = await supabase
           .from('educational_articles')
-          .select('id, title, content, advice, image_url, source_url, created_at')
+          .select('id, title, content, advice, image_url, source_url, created_at, type')
           .order('created_at', { ascending: false })
           .limit(limit);
 
@@ -51,7 +52,7 @@ export async function getEducationArticleById(id: string): Promise<EducationArti
   try {
     const { data, error } = await supabase
       .from('educational_articles')
-      .select('id, title, content, advice, image_url, source_url, created_at')
+      .select('id, title, content, advice, image_url, source_url, created_at, type')
       .eq('id', id)
       .single();
 

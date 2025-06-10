@@ -11,7 +11,7 @@ export default function EducationPage() {
     loading: boolean;
     error: string | null;
     articles: EducationArticle[];
-  } = useEducationArticles();
+  } = useEducationArticles(10);
 
   console.log('Fetched articles:', articles);
 
@@ -49,14 +49,19 @@ export default function EducationPage() {
               No educational articles found.
             </Text>
           ) : (
-            articles.map((article: EducationArticle, index: number) => (
-              <Card
-                key={index}
-                title={article.title}
-                content={article.content}
-                mainImage={article.image_url ?? undefined}
-              />
-            ))
+            articles.map((article: EducationArticle, index: number) => {
+              console.log('→ Advice from Supabase:', article.advice);
+              return (
+                <Card
+                  key={index}
+                  title={article.title}
+                  type={article.type}
+                  content={article.content}
+                  mainImage={article.image_url ?? undefined}
+                  advice={article.advice ?? undefined}
+                />
+              );
+            })
           )}
         </ScrollView>
       )}
