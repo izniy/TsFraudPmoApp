@@ -1,4 +1,5 @@
 import Card from '@/components/card';
+import FeaturedCard from '@/components/featuredCard';
 import { LoadingScreen } from '@/components/loading';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
@@ -14,21 +15,24 @@ interface ScamReport {
   type: string;
   summary: string;
   image: string | null;
-  timestamp: string;
+  timestamp: number;
   count: number;
 }
 
 export default function ScamsPage() {
-  const [loading, setLoading] = useState(true);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [topLoading, setTopLoading] = useState(true);
   const [popupVisible, setPopupVisible] = useState(false);
   const [recentScams, setRecentScams] = useState<ScamReport[]>([]);
+  const [topScams, setTopScams] = useState<ScamReport[]>([]);
 
-  async function fetchScams() {
-    setLoading(true);
+  async function fetchRecentScams() {
+    setRecentLoading(true);
     try {
       const { data, error } = await supabase
         .from('scamreports')
         .select('id, title, type, summary, image, timestamp, count')
+        .gte('count', 3)
         .order('timestamp', { ascending: false })
         .limit(20);
 
@@ -43,12 +47,38 @@ export default function ScamsPage() {
     } catch (error) {
       console.error('Unexpected error fetching scam reports:', error);
     } finally {
-      setLoading(false);
+      setRecentLoading(false);
+    }
+  }
+
+  async function fetchTopScams() {
+    setTopLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('scamreports')
+        .select('id, title, type, summary, image, timestamp, count')
+        .gte('count', 3)
+        .order('count', { ascending: false })
+        .limit(3);
+
+      if (error) {
+        console.error('Error fetching scam reports:', error.message);
+        return;
+      }
+
+      if (data) {
+        setTopScams(data);
+      }
+    } catch (error) {
+      console.error('Unexpected error fetching scam reports:', error);
+    } finally {
+      setTopLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchScams();
+    fetchRecentScams();
+    fetchTopScams();
   }, []);
   
   const togglePage = () => {
@@ -74,9 +104,36 @@ export default function ScamsPage() {
         </View>
       </View>
 
+      {/* Top Scams Section */}
+      <View className="h-1/3 mb-4">
+        <Text className="text-2xl font-bold text-gray-900 px-4 mb-4">Top Scams</Text>
+        {topLoading ? (
+          <LoadingScreen />
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToAlignment="start" // Align to start of card
+            disableIntervalMomentum={true} // Prevent swiping multiple cards at once
+            overScrollMode="never" // Disable over-scroll effect
+            className="px-4"
+          >
+            {topScams.map((scam) => (
+              <FeaturedCard 
+                key={scam.id}
+                title={scam.title}
+                content={scam.summary}
+                type={scam.type}
+                mainImage={scam.image ?? undefined}
+              />
+            ))}
+          </ScrollView>
+        )}
+      </View>
+
       <Text className="text-2xl font-bold text-gray-900 px-4 mb-4">Recent Scams</Text>
 
-      {loading ? (
+      {recentLoading ? (
         <LoadingScreen />
       ) : (
         <ScrollView className="flex-1 px-4">
@@ -111,7 +168,8 @@ export default function ScamsPage() {
         visible={popupVisible}
         onClose={() => setPopupVisible(false)}
         onSubmitted={() => {
-          fetchScams();
+          fetchRecentScams();
+          fetchTopScams();
           setPopupVisible(false);
         }}
       />

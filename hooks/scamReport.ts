@@ -85,9 +85,14 @@ export function useScamReporter(): UseScamReporterResult {
     let imageUrl = null;
 
     if (imageUri) {
-      // Upload local file to Supabase Storage first (optional, if you want public URL)
-      const publicImageUrl = await uploadImageToSupabase(imageUri);
-      imageUrl = publicImageUrl
+      if (imageUri.startsWith('http')) {
+        // Already a public URL, use directly
+        imageUrl = imageUri;
+      } else {
+        // Local file, upload to Supabase
+        const publicImageUrl = await uploadImageToSupabase(imageUri);
+        imageUrl = publicImageUrl;
+      }
 
       // Fetch the public image URL as blob
       const response = await fetch(imageUrl);
@@ -107,7 +112,7 @@ export function useScamReporter(): UseScamReporterResult {
       createUserContent([
         `Ssummarise the scam into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).
         DO NOT include Markdown formatted content in the response, simply respond in plaintext.
-        Split the content into two segments accordingly (description and how to avoid) and separate them by two newlines.
+        Split the content into two paragraphs accordingly (description and how to avoid) and separate them by two newlines with no special characters.
         Respond as JSON: title (string), type (string), content (string).
 
         Incident description:
@@ -123,8 +128,9 @@ export function useScamReporter(): UseScamReporterResult {
 
     let text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
     text = text.trim()
-      .replace(/^```json\s*/, '')   // Remove ```json at start if present
-      .replace(/```$/, ''); 
+      .replace(/^```(json)?\s*/i, '')   // Remove ```json or ``` at start
+      .replace(/```$/i, '')             // Remove ``` at end
+      .replace(/[\u0000-\u001F]/g, '');  // Remove control characters
 
     const summary = JSON.parse(text);
     summary.image = imageUrl;
@@ -185,7 +191,7 @@ export function useScamReporter(): UseScamReporterResult {
       // Search for similar scams
       const { data: similar, error: searchError } = await supabase.rpc('match_scam', {
         query_embedding: embedding,
-        match_threshold: 0.8,
+        match_threshold: 0.85,
         match_count: 1,
       });
 
@@ -200,7 +206,7 @@ export function useScamReporter(): UseScamReporterResult {
         // Step 1: Get current count
         const { data: current, error: fetchError } = await supabase
           .from('scamreports')
-          .select('count, title, summary')
+          .select('count, title, summary, image')
           .eq('id', existingId)
           .single();
 
@@ -212,21 +218,37 @@ export function useScamReporter(): UseScamReporterResult {
         const combinedDescription = `${current?.summary}\n\n---\n\n${description}`;
         console.log('[processReport] Combined description for Gemini:', combinedDescription);
 
-        const combinedSummary = await summariseWithGemini(combinedDescription, null);
-
+        const combinedSummary = await summariseWithGemini(combinedDescription, current?.image);
         console.log('[processReport] Combined Gemini summary:', JSON.stringify(combinedSummary));
+
+        const combinedEmbeddings = await generateEmbedding(combinedDescription);
+        console.log('[processReport] Combined embeddings:', combinedEmbeddings.slice(0, 5), '... Length:', combinedEmbeddings.length);
+        const updatedCount = current?.count + 1;
 
         // Step 4: Update count, title, summary
         const { error: updateError } = await supabase
           .from('scamreports')
           .update({
-            count: (current?.count ?? 0) + 1,
+            count: updatedCount,
             title: combinedSummary.title,
             summary: combinedSummary.content,
+            embeddings: combinedEmbeddings,
           })
           .eq('id', existingId);
 
         if (updateError) throw new Error(updateError.message);
+
+        // Step 5: If count is multiple of 3, update timestamp for new report to be published on Telegram bot
+        if (updatedCount % 3 === 0) {
+          const {error: updateTimestampError } = await supabase
+            .from('scamreports')
+            .update({
+              timestamp: Date.now(),
+            })
+            .eq('id', existingId);
+
+            if (updateTimestampError) throw new Error(updateTimestampError.message);
+        }
 
         console.log('[processReport] Successfully uploaded issue to database');
 
