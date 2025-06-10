@@ -136,7 +136,8 @@ export function useScamReporter(): UseScamReporterResult {
   async function verifyReport(description: string) {
     const contents = [
       createUserContent([
-        `Verify whether this scam is a legitimate incident through identifiying common scam red flags such as phishing links or other signs.
+        `Verify whether this scam is a legitimate incident through identifying common scam red flags such as phishing links, unsolicited requests for personal info (passwords, bank details, phone number), sense of urgency or threats. If unsure, just return true to be safe. 
+        
         Return a single boolean (true or false) response.
 
         Incident description:
