@@ -1,7 +1,6 @@
-from supabase import create_client, Client as SupabaseClient
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from dotenv import load_dotenv
 from datetime import datetime, timezone
 import telebot
 import os
@@ -10,6 +9,7 @@ import io
 import mimetypes
 import uuid
 import json
+from supabase import create_client, Client as SupabaseClient
 
 load_dotenv()
 user_reports = {}
@@ -478,7 +478,6 @@ def process_full_report(bot, message, gemini_client):
                     merged_report_type = combined_gemini_output.get("type", existing_type) 
 
                 except json.JSONDecodeError as e_json_re:
-                    print(f"Error decoding Gemini JSON for re-summary: {e_json_re}. Response: {cleaned_text if 'cleaned_text' in locals() else 'N/A'}")
                     bot.send_message(message.chat.id, "Could not parse AI re-summary for merging. Using existing/combined data for title, summary, type.")
                 except Exception as e_gemini_re:
                     print(f"Error re-summarizing with Gemini: {e_gemini_re}")
@@ -574,8 +573,6 @@ def process_full_report(bot, message, gemini_client):
             report_summary = gemini_output.get("content", report_summary)
 
         except json.JSONDecodeError as e_json:
-            # (Error logging as before)
-            print(f"Error decoding Gemini JSON for new report: {e_json}. Response: {cleaned_response_text if 'cleaned_response_text' in locals() else 'N/A'}")
             bot.send_message(message.chat.id, "Could not parse AI summary for new report. Using defaults.")
         except Exception as e_gemini:
             print(f"Error generating summary with Gemini for new report: {e_gemini}")
@@ -642,3 +639,113 @@ def upload_image_to_supabase_py(bot: telebot.TeleBot, file_id: str, supabase_cli
     except Exception as e:
         print(f"Error uploading image to Supabase: {e}")
         return None
+
+# Initialize Supabase client if not already done globally and db_enabled
+if db_enabled and supabase_url and supabase_key and not supabase:
+    try:
+        supabase = create_client(supabase_url, supabase_key)
+        print("[Supabase Client] Initialized in functions.py")
+    except Exception as e:
+        print(f"[Supabase Client] Error initializing in functions.py: {e}")
+        supabase = None # Ensure supabase is None if initialization fails
+elif not supabase and db_enabled:
+    print("[Supabase Client] supabase_url or supabase_key might be missing. Supabase client not initialized.")
+
+
+def broadcast_popular_scams(bot: telebot.TeleBot):
+    """
+    Fetches scam reports with a count of at least 3 that haven't been broadcasted,
+    sends them to the designated Telegram channel, and marks them as broadcasted.
+    """
+    if not db_enabled or not supabase:
+        print("[broadcast_popular_scams] Database is not enabled or Supabase client not initialized.")
+        return
+
+    channel_id_str = os.getenv("TELEGRAM_CHANNEL_ID")
+    if not channel_id_str:
+        print("[broadcast_popular_scams] TELEGRAM_CHANNEL_ID not set in .env file.")
+        return
+    
+    try:
+        channel_id = int(channel_id_str)
+    except ValueError:
+        print(f"[broadcast_popular_scams] Invalid TELEGRAM_CHANNEL_ID: {channel_id_str}. Must be an integer.")
+        return
+
+    min_count = 3
+    print(f"[broadcast_popular_scams] Checking for reports with count >= {min_count} and was_broadcasted = FALSE")
+
+    try:
+        # Fetch reports
+        response = (supabase.table('scamreports')
+            .select('id, title, summary, image, count, type')
+            .gte('count', min_count)
+            .eq('was_broadcasted', False)
+            .execute())
+
+        # supabase-py v2+ returns APIResponse; errors typically raise exceptions or are in response.error if PostgrestError
+        # For simplicity, we'll check if response.data exists. If an error occurred, response.data might be None or an exception raised.
+        
+        if response.data:
+            reports_to_broadcast = response.data
+            print(f"[broadcast_popular_scams] Found {len(reports_to_broadcast)} reports to broadcast.")
+
+            for report in reports_to_broadcast:
+                report_id = report.get('id')
+                title = report.get('title', 'N/A')
+                summary = report.get('summary', 'N/A')
+                image_filename = report.get('image') # This is the filename in Supabase storage
+                scam_type = report.get('type', 'Unknown')
+                current_report_count = report.get('count', 0)
+                summary = summary.replace("\\ \\ ", '\n')
+
+                message_text = (
+                    f"📢 *Scam Alert!* 📢\n\n"
+                    f"*Title:* {title}\n"
+                    f"*Type:* {scam_type}\n"
+                    f"*Reported Instances:* {current_report_count}\n\n"
+                    f"*Details & How to Avoid:*\n{summary}\n\n"
+                    f"#TsFraudPmo #ScamAlert #{scam_type.replace(' ', '').replace('-', '')}"
+                )
+                
+                try:
+                    photo_sent = False
+                    if image_filename:
+                        image_public_url = image_filename
+
+                        print(image_public_url)
+                        
+                        if image_public_url:
+                            print(f"[broadcast_popular_scams] Sending photo broadcast for report ID {report_id} with image URL: {image_public_url}")
+                            bot.send_photo(channel_id, photo=image_public_url, caption=message_text, parse_mode="Markdown")
+                            photo_sent = True
+                        else:
+                            print(f"[broadcast_popular_scams] Could not get public URL for image {image_filename}. Sending text only for report ID {report_id}.")
+                    
+                    if not photo_sent: # If no image or image URL failed
+                        print(f"[broadcast_popular_scams] Sending text-only broadcast for report ID {report_id}")
+                        bot.send_message(channel_id, message_text, parse_mode="Markdown")
+                    
+                    # Mark as broadcasted
+                    update_response = (supabase.table('scamreports')
+                        .update({'was_broadcasted': True})
+                        .eq('id', report_id)
+                        .execute())
+                        
+                    # Check if update was successful (supabase-py v2, data is usually a list of updated records)
+                    if not update_response.data: # Or if an error attribute exists and is set, depending on exact error
+                         print(f"[broadcast_popular_scams] Failed to mark report {report_id} as broadcasted. Response: {update_response}")
+                    else:
+                        print(f"[broadcast_popular_scams] Successfully marked report {report_id} as broadcasted.")
+
+                except Exception as e_broadcast:
+                    print(f"[broadcast_popular_scams] Error sending message for report {report_id} to channel {channel_id}: {e_broadcast}")
+        elif response.data is None and hasattr(response, 'error') and response.error: # Check for explicit error if data is None
+             print(f"[broadcast_popular_scams] Error fetching reports: {response.error}")
+        else: # No data and no explicit error object, or data is empty list
+            print("[broadcast_popular_scams] No new high-count reports to broadcast or error fetching.")
+
+    except Exception as e:
+        print(f"[broadcast_popular_scams] An unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()

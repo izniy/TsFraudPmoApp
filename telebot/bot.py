@@ -3,6 +3,9 @@ import os
 from google import genai
 from dotenv import load_dotenv
 import functions as f
+import schedule
+import time
+import threading
 
 
 load_dotenv()
@@ -32,4 +35,20 @@ def handle(message):
     f.send_error_message(bot, message, message.content_type)
 
 
-bot.infinity_polling()
+def run_scheduler():
+    """Runs the scheduled tasks in a separate thread."""
+    # Schedule the broadcast_popular_scams function to run every 5 minutes
+    schedule.every(5).minutes.do(f.broadcast_popular_scams, bot=bot)
+    # schedule.every(20).seconds.do(f.broadcast_popular_scams, bot=bot) # For testing
+
+    print("[Scheduler] Starting scheduler...")
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+if __name__ == '__main__':
+    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+    scheduler_thread.start()
+
+    bot.infinity_polling()
