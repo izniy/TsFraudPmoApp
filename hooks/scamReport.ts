@@ -5,16 +5,14 @@ import { supabase } from '../utils/supabase';
 
 interface GeminiSummary {
   title: string;
-  image: string | null;
   content: string;
-  verified: boolean;
+  verified: number;
 }
 
 interface UseScamReporterResult {
   loading: boolean;
   error: string | null;
-  result: GeminiSummary | null;
-  processReport: (description: string, imageUri: string | null) => Promise<void>;
+  processReport: (description: string, imageUri: string | null) => Promise<GeminiSummary>;
 }
 
 export function useScamReporter(): UseScamReporterResult {
@@ -110,7 +108,7 @@ export function useScamReporter(): UseScamReporterResult {
 
     const contents = [
       createUserContent([
-        `Ssummarise the scam into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).
+        `Summarise the scam into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).
         DO NOT include Markdown formatted content in the response, simply respond in plaintext.
         Split the content into two paragraphs accordingly (description and how to avoid) and separate them by two newlines with no special characters.
         Respond as JSON: title (string), type (string), content (string).
@@ -173,59 +171,90 @@ export function useScamReporter(): UseScamReporterResult {
     throw new Error(`Unable to parse verification response: "${text}"`);
   }
 
-  async function processReport(description: string, imageUri: string | null) {
+  async function generateFeedback(description: string) {
+    const contents = [
+      createUserContent([
+        `Analyze the message critically for common scam red flags, such as:
+        - Sense of urgency or threats
+        - Unsolicited requests for personal information (passwords, bank details, social security numbers)
+        - Suspicious links or attachments (Note: You will only see the text, not actual links or attachments. Evaluate based on how they are described or if their presence is mentioned)
+        - Poor grammar, spelling or unprofessional language
+        - Offers that seem too good to be true
+        - Impersonation of legitimate organisations or individuals
+        - Unusual payment methods requested
+        
+        Based on your analysis:
+        1. Start your response with a clear assessment: 'This message is LIKELY A SCAM', 'This message is LIKELY NOT A SCAM', or 'This message has SOME RED FLAGS and could be a scam'
+        2. Provide a step-by-step reasoning for your assessment, explaining which red flags (if any) you identified in the message, or why you believe it's not a scam. Be specific and refer to parts of the message if possible.
+
+        Format the response in a valid JSON file.
+        Let title (string) be the assessment in Step 1, the step-by-step reasoning in Step 2 be content (string) and verified (number) be 1, 2 or 3 depending on the response to title.
+        1 corresponds to 'This message is LIKELY A SCAM', 2 corresponds to 'This message is LIKELY NOT A SCAM', and 3 corresponds to 'This message has SOME RED FLAGS and could be a scam'.
+        Format content into a numbered list format (eg. "1. ..., 2. ..., ..."), with 2-3 short and concise steps that are most relevant and newline character at the end of each step.
+        Do NOT include any additional formatting like Markdown!
+
+        User's message to verify:
+        ${description}`
+      ])
+    ]
+
+    const response = await gemini.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents,
+    });
+
+    let text = response.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+    text = text.trim()
+      .replace(/^```(json)?\s*/i, '')   // Remove ```json or ``` at start
+      .replace(/```$/i, '')             // Remove ``` at end
+      .replace(/[\u0000-\u001F]/g, '');  // Remove control characters
+
+    const feedback = JSON.parse(text);
+    console.log(`[generateFeedback] Generated feedback: ${JSON.stringify(feedback)}`)
+
+    return feedback;
+  }
+
+  async function processReport(description: string, imageUri: string | null): Promise<GeminiSummary> {
     setLoading(true);
     setError(null);
 
     try {
       console.log('[processReport] Description received:', description);
       const verifiedReport = await verifyReport(description);
+      const feedback = await generateFeedback(description);
+
       if (!verifiedReport) {
         console.log('[processReport] False report received. Terminating...');
-        setResult(null);
-        return;
+        return feedback;
       }
+
       const embedding = await generateEmbedding(description);
       console.log('[processReport] Generated embedding:', embedding.slice(0, 5), '... Length:', embedding.length);
 
-      // Search for similar scams
       const { data: similar, error: searchError } = await supabase.rpc('match_scam', {
         query_embedding: embedding,
         match_threshold: 0.85,
         match_count: 1,
       });
 
-      console.log('[processReport] Supabase match_scam result:', similar);
-
       if (searchError) throw new Error(searchError.message);
 
       if (similar?.length > 0) {
         const existingId = similar[0].id;
-        console.log('[processReport] Found similar scam with id:', existingId);
-
-        // Step 1: Get current count
         const { data: current, error: fetchError } = await supabase
           .from('scamreports')
           .select('count, title, summary, image')
           .eq('id', existingId)
           .single();
 
-        console.log('[processReport] Current scam data:', current);
-
         if (fetchError) throw new Error(fetchError.message);
 
-        // Step 3: Generate a new combined summary using Gemini
         const combinedDescription = `${current?.summary}\n\n---\n\n${description}`;
-        console.log('[processReport] Combined description for Gemini:', combinedDescription);
-
         const combinedSummary = await summariseWithGemini(combinedDescription, current?.image);
-        console.log('[processReport] Combined Gemini summary:', JSON.stringify(combinedSummary));
-
         const combinedEmbeddings = await generateEmbedding(combinedDescription);
-        console.log('[processReport] Combined embeddings:', combinedEmbeddings.slice(0, 5), '... Length:', combinedEmbeddings.length);
         const updatedCount = current?.count + 1;
 
-        // Step 4: Update count, title, summary
         const { error: updateError } = await supabase
           .from('scamreports')
           .update({
@@ -238,26 +267,20 @@ export function useScamReporter(): UseScamReporterResult {
 
         if (updateError) throw new Error(updateError.message);
 
-        // Step 5: If count is multiple of 3, update timestamp for new report to be published on Telegram bot
         if (updatedCount % 3 === 0) {
-          const {error: updateTimestampError } = await supabase
+          const { error: updateTimestampError } = await supabase
             .from('scamreports')
             .update({
               timestamp: Date.now(),
             })
             .eq('id', existingId);
 
-            if (updateTimestampError) throw new Error(updateTimestampError.message);
+          if (updateTimestampError) throw new Error(updateTimestampError.message);
         }
 
-        console.log('[processReport] Successfully uploaded issue to database');
-
-        setResult(null);
+        return feedback;
       } else {
-        console.log('[processReport] No similar scam found, creating new record');
-
         const summary = await summariseWithGemini(description, imageUri);
-        console.log('[processReport] New Gemini summary:', summary);
 
         await supabase
           .from('scamreports')
@@ -271,17 +294,17 @@ export function useScamReporter(): UseScamReporterResult {
             embeddings: embedding,
           });
 
-        console.log('[processReport] Successfully uploaded issue to database');
-
-        setResult(summary);
+        return feedback;
       }
     } catch (e: any) {
       console.error('[processReport] Error:', e);
       setError(e.message || 'Something went wrong.');
+      throw e;
     } finally {
       setLoading(false);
     }
   }
 
-  return { loading, error, result, processReport };
+
+  return { loading, error, processReport };
 }
