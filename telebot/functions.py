@@ -40,12 +40,15 @@ def send_welcome(bot, message):
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     start_button = telebot.types.KeyboardButton('/start')
     report_button = telebot.types.KeyboardButton('/report')
-    markup.add(start_button, report_button)
+    verify_button = telebot.types.KeyboardButton('/verify')
+    view_reports_button = telebot.types.KeyboardButton('/history')
+    markup.add(start_button, report_button, verify_button, view_reports_button)
 
     bot.reply_to(message, "Hi, I'm TsFraudPmo, your go-to bot for scam reporting and fraud awareness!"
-                          "I can help you understand scams, avoid them, and report any suspicious activity.\n\n"
+                          "I'm extension of the mobile application TsFraudPmo, and can help you understand scams, avoid them, and report any suspicious activity.\n\n"
                           "If you'd like to report a scam, simply press the button or type /report!\n\n"
                           "You can also ask me to verify messages for potential scams by typing /verify.\n\n"
+                          "If you want to view your report history, type /history.\n\n"
                           "Else, you can ask me anything or just chat with me!",
                  reply_markup=markup)
 
@@ -508,7 +511,7 @@ def process_full_report(bot, message, gemini_client):
                     error_detail = "Update operation did not return expected data structure."
                 
                 if not update_error_occurred:
-                    bot.send_message(message.chat.id, "Merge successful. Thank you for your report!")
+                    bot.send_message(message.chat.id, "Merge successful. Thank you for your report and please continue staying vigilant!")
                     similar_report_found = True
                 else: 
                     error_msg = "Failed to update existing report."
@@ -599,7 +602,7 @@ def process_full_report(bot, message, gemini_client):
         insert_op = supabase.table('scamreports').insert(db_payload).execute()
 
         if hasattr(insert_op, 'data') and insert_op.data:
-            bot.send_message(message.chat.id, "Thank you for your report, it has been successfully submitted!")
+            bot.send_message(message.chat.id, "Thank you for your report and please continue staying vigilant!")
         else:
             error_msg = "Failed to save new report."
             print(f"Supabase insert error for new report: {getattr(insert_op, 'error', 'Unknown error')}")
