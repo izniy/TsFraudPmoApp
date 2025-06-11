@@ -279,7 +279,7 @@ def handle_photo_evidence(bot, message, gemini_client):
     view_btn = telebot.types.KeyboardButton("View report")
     markup.add(yes_btn, no_btn, edit_btn, view_btn)
 
-    bot.send_message(message.chat.id, "Photo evidence added. Do you have any more evidence to share?", reply_markup=markup)
+    bot.send_message(message.chat.id, "Photo evidence added. Do you have any more evidence to share? (Yes/No)", reply_markup=markup)
     bot.register_next_step_handler(message, request_evidence, bot, gemini_client) 
 
 
@@ -449,10 +449,10 @@ def process_full_report(bot, message, gemini_client):
 
                 try:
                     combined_prompt = (
-                        f"Summarise the combined scam information into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).\\n"
-                        f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\\n"
-                        f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\\n"
-                        f"Split the content into two segments accordingly (description and how to avoid) and separate them by two JSON escape sequences."
+                        f"Summarise the combined scam information into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).\n"
+                        f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\n"
+                        f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\n"
+                        f"Split the content into two segments (description and how to avoid) and separate them using the exact literal string '[SECTION_BREAK]'. This string is a placeholder and will be replaced later.\n"
                         f"Keep the content to under 120 words.\\n"
                         f"Combined Information:\\n{combined_description}"
                     )
@@ -469,6 +469,9 @@ def process_full_report(bot, message, gemini_client):
 
                     combined_gemini_output = json.loads(cleaned_text)
                     
+                    if 'content' in combined_gemini_output and isinstance(combined_gemini_output['content'], str):
+                        combined_gemini_output['content'] = combined_gemini_output['content'].replace('[SECTION_BREAK]', '\n\n')
+
                     merged_report_title = combined_gemini_output.get("title", merged_report_title)
                     merged_report_summary = combined_gemini_output.get("content", current_summary) 
                     merged_report_type = combined_gemini_output.get("type", existing_type) 
@@ -526,10 +529,10 @@ def process_full_report(bot, message, gemini_client):
         try:
             gemini_request_contents = []
             main_prompt_text = (
-                f"Summarise the scam into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).\\n"
-                f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\\n"
-                f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\\n"
-                f"The 'content' field should be a single string. If you need to represent separate paragraphs or line breaks within the 'content' string, use \\n for newlines. Keep it to under 120 words."
+                f"Summarise the scam information into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).\n"
+                f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\n"
+                f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\n"
+                f"Split the content into two segments (description and how to avoid) and separate them using the exact literal string '[SECTION_BREAK]'. This string is a placeholder and will be replaced later.\n Keep it to under 120 words."
                 f"Incident description:\\n{description}"
             )
             gemini_request_contents.append(main_prompt_text)
@@ -566,6 +569,10 @@ def process_full_report(bot, message, gemini_client):
                  cleaned_response_text = cleaned_response_text[3:-3] if cleaned_response_text.endswith("```") else cleaned_response_text[3:]
             
             gemini_output = json.loads(cleaned_response_text)
+            
+            if 'content' in gemini_output and isinstance(gemini_output['content'], str):
+                gemini_output['content'] = gemini_output['content'].replace('[SECTION_BREAK]', '\n\n')
+
             report_title = gemini_output.get("title", report_title)
             report_type = gemini_output.get("type", report_type)
             report_summary = gemini_output.get("content", report_summary)
@@ -787,7 +794,7 @@ def broadcast_popular_scams(bot: telebot.TeleBot):
                 image_filename = report.get('image') # This is the filename in Supabase storage
                 scam_type = report.get('type', 'Unknown')
                 current_report_count = report.get('count', 0)
-                summary = summary.replace("\\ \\ ", '\n').replace(" \\ \\", '\n').replace("\\ \\", '\n')
+                summary = summary.replace("\\ \\ ", '\n').replace(" \\ \\", '\n').replace("\\ \\", '\n').replace("\u000d\u000d", '\n').replace("\u000d", '\n').replace("\u000a\u000a", '\n').replace("\u000a", '\n').strip()
 
                 message_text = (
                     f"📢 *Scam Alert!* 📢\n\n"
