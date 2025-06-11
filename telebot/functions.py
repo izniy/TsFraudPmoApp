@@ -353,7 +353,6 @@ def process_full_report(bot, message, gemini_client):
         bot.send_message(message.chat.id, "Your report could not be verified as a legitimate scam or appears to be a false report. Submission has been cancelled.")
         if user_id in user_reports:
             del user_reports[user_id]
-        send_welcome(bot, message)
         return
     bot.send_message(message.chat.id, "Report has been verified to be a potential scam. Please wait while we process it...")
 
@@ -454,7 +453,7 @@ def process_full_report(bot, message, gemini_client):
                         f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\\n"
                         f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\\n"
                         f"Split the content into two segments accordingly (description and how to avoid) and separate them by two JSON escape sequences."
-                        f""
+                        f"Keep the content to under 120 words.\\n"
                         f"Combined Information:\\n{combined_description}"
                     )
                     gemini_response = gemini_client.models.generate_content(
@@ -486,8 +485,9 @@ def process_full_report(bot, message, gemini_client):
                     "summary": merged_report_summary,
                     "type": merged_report_type,
                     "timestamp": current_timestamp_for_db,
-                    "embeddings": merged_report_embeddings
-                }                
+                    "embeddings": merged_report_embeddings,
+                    "user_ids": supabase.rpc('array_append_unique', {'arr': existing_report.get('user_ids', []), 'val': user_id}).execute().data
+                }
                 print(f"Count after merging: {update_payload['count']}")
                 if image_public_url:
                     update_payload["image"] = image_public_url
@@ -504,8 +504,8 @@ def process_full_report(bot, message, gemini_client):
                     update_error_occurred = True
                     error_detail = "Update operation did not return expected data structure."
                 
-                if not update_error_occurred: # Assuming success if no error attribute or if data indicates success
-                    bot.send_message(message.chat.id, "Report successfully merged and updated in the database.")
+                if not update_error_occurred:
+                    bot.send_message(message.chat.id, "Merge successful. Thank you for your report!")
                     similar_report_found = True
                 else: 
                     error_msg = "Failed to update existing report."
@@ -513,8 +513,8 @@ def process_full_report(bot, message, gemini_client):
                     print(f"Supabase update error (merging): {error_detail}. Response: {update_op}")
                     bot.send_message(message.chat.id, error_msg + " The system will attempt to save this as a new report.")
             else:
-                # Successful response, but no data (e.g., RPC returned empty list)
-                bot.send_message(message.chat.id, "No similar reports found. This will be saved as a new entry.")
+                print("[process_full_report] No similar reports found, proceeding to save as a new report.")
+                similar_report_found = False
 
     
         except Exception as e_rpc: # Catch other exceptions during RPC call or initial response handling
@@ -529,7 +529,7 @@ def process_full_report(bot, message, gemini_client):
                 f"Summarise the scam into a short title, scam type, and content (description of the scam, and how to avoid falling for such scams).\\n"
                 f"DO NOT include Markdown formatted content in the response. Respond ONLY with a single, valid JSON object.\\n"
                 f"The JSON object must have three keys: 'title' (string), 'type' (string), and 'content' (string).\\n"
-                f"The 'content' field should be a single string. If you need to represent separate paragraphs or line breaks within the 'content' string, use \\n for newlines. "
+                f"The 'content' field should be a single string. If you need to represent separate paragraphs or line breaks within the 'content' string, use \\n for newlines. Keep it to under 120 words."
                 f"Incident description:\\n{description}"
             )
             gemini_request_contents.append(main_prompt_text)
@@ -585,13 +585,14 @@ def process_full_report(bot, message, gemini_client):
             "image": image_public_url,
             "count": 1,
             "type": report_type,
-            "embeddings": final_embeddings if final_embeddings else None # Store embeddings
+            "embeddings": final_embeddings if final_embeddings else None, # Store embeddings
+            "user_ids": [user_id] # Store as an array with the initial user_id
         }
         
         insert_op = supabase.table('scamreports').insert(db_payload).execute()
 
         if hasattr(insert_op, 'data') and insert_op.data:
-            bot.send_message(message.chat.id, "New report submitted successfully to the database!")
+            bot.send_message(message.chat.id, "Thank you for your report, it has been successfully submitted!")
         else:
             error_msg = "Failed to save new report."
             print(f"Supabase insert error for new report: {getattr(insert_op, 'error', 'Unknown error')}")
@@ -650,6 +651,46 @@ def process_verification_request(message, bot, gemini_client):
         print(f"Error during scam verification with Gemini: {e}")
         bot.send_message(message.chat.id, "Sorry, I encountered an error while trying to verify the message. Please try again later.")
     return
+
+def view_report_history(bot, message, supabase_client):
+    user_id = message.from_user.id
+
+    if not db_enabled or not supabase_client:
+        bot.send_message(message.chat.id, "Sorry, the report history feature is currently unavailable as the database is not connected.")
+        return
+
+    try:
+        response = (
+            supabase_client.table('scamreports')
+            .select('title, summary, timestamp, type, image') # Select desired fields
+            .contains('user_ids', [str(user_id)])
+            .order('timestamp', desc=True) # Order by timestamp descending
+            .limit(3) # Limit to the last 3 reports
+            .execute()
+        )
+
+        if hasattr(response, 'data') and response.data:
+            history_message = "Here are your last 3 submitted reports:\n\n"
+            for i, report in enumerate(response.data):
+                report_title = report.get('title', 'N/A')
+                report_type = report.get('type', 'N/A')
+                # Convert timestamp from milliseconds to a readable date
+                report_timestamp_ms = report.get('timestamp')
+                if report_timestamp_ms:
+                    report_date = datetime.fromtimestamp(report_timestamp_ms / 1000, timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+                else:
+                    report_date = 'N/A'
+                
+                history_message += f"{i+1}. *{report_title}* ({report_type})\n"
+                history_message += f"   _Submitted on: {report_date}_\n"
+            
+            bot.send_message(message.chat.id, history_message, parse_mode='Markdown')
+        else:
+            bot.send_message(message.chat.id, "You haven't submitted any reports yet.")
+
+    except Exception as e:
+        print(f"Error fetching report history: {e}")
+        bot.send_message(message.chat.id, "Sorry, I encountered an error while trying to fetch your report history. Please try again later.")
 
 def upload_image_to_supabase_py(bot: telebot.TeleBot, file_id: str, supabase_client):
     try:
@@ -746,7 +787,7 @@ def broadcast_popular_scams(bot: telebot.TeleBot):
                 image_filename = report.get('image') # This is the filename in Supabase storage
                 scam_type = report.get('type', 'Unknown')
                 current_report_count = report.get('count', 0)
-                summary = summary.replace("\\ \\ ", '\n')
+                summary = summary.replace("\\ \\ ", '\n').replace(" \\ \\", '\n').replace("\\ \\", '\n')
 
                 message_text = (
                     f"📢 *Scam Alert!* 📢\n\n"
@@ -754,7 +795,7 @@ def broadcast_popular_scams(bot: telebot.TeleBot):
                     f"*Type:* {scam_type}\n"
                     f"*Reported Instances:* {current_report_count}\n\n"
                     f"*Details & How to Avoid:*\n{summary}\n\n"
-                    f"#TsFraudPmo #ScamAlert #{scam_type.replace(' ', '').replace('-', '')}"
+                    f"#TsFraudPmo #ScamAlert #{scam_type.replace(' ', '').replace('-', '').replace('/', ' #')}" 
                 )
                 
                 try:

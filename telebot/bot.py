@@ -30,6 +30,11 @@ def handle_verify(message):
     f.initiate_verify_message(bot, message, client)
 
 
+@bot.message_handler(commands=['history', 'viewreports'])
+def handle_view_reports(message):
+    f.view_report_history(bot, message, f.supabase)
+
+
 @bot.message_handler(content_types=['text'])
 def handle_message(message):
     f.send_message(bot, client, message)
