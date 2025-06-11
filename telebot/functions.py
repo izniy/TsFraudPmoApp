@@ -355,7 +355,7 @@ def process_full_report(bot, message, gemini_client):
             del user_reports[user_id]
         send_welcome(bot, message)
         return
-    bot.send_message(message.chat.id, "Report verified. Now processing your report...")
+    bot.send_message(message.chat.id, "Report has been verified to be a potential scam. Please wait while we process it...")
 
     image_public_url = None
     text_evidence_items = []
@@ -417,7 +417,7 @@ def process_full_report(bot, message, gemini_client):
         try:
             match_params = {
                 'query_embedding': final_embeddings,
-                'match_threshold': 0.9,
+                'match_threshold': 0.85,
                 'match_count': 1 
             }
             similar_reports_response = supabase.rpc('match_scam', match_params).execute()
